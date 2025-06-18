@@ -1,18 +1,23 @@
 package ui;
 
 import Cache.CacheBlock;
-import Cache.DirectMappedCache;
 import Cache.CacheInterface;
+import Cache.DirectMappedCache;
 import Cache.SetAssociativeCache;
 import javafx.application.Application;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
+import javafx.scene.chart.PieChart;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.VBox;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+
+import java.io.*;
+
 
 
 public class MainUI extends Application {
@@ -29,6 +34,11 @@ public class MainUI extends Application {
     private TextArea addressInput;
     private TextArea outputArea;
     private TableView<CacheRow> table;
+    private PieChart pieChart;
+    private TextField blockCountField;
+    private TextField wayCountField;
+
+
 
     public static class CacheRow {
         private final int index;
@@ -71,10 +81,30 @@ public class MainUI extends Application {
 
         simulateBtn.setOnAction(e -> simulateAccesses());
         resetBtn.setOnAction(e -> reset());
+        Button browseBtn = new Button("Browse File");
+        browseBtn.setOnAction(e -> loadFile());
+        Button saveBtn = new Button("Save Output");
+        saveBtn.setOnAction(e -> saveOutputToFile());
+
+
 
         outputArea = new TextArea();
         outputArea.setEditable(false);
         outputArea.setPromptText("Simulation output...");
+        pieChart = new PieChart();
+        pieChart.setTitle("Cache Hit vs Miss");
+        pieChart.setLegendVisible(true);
+        pieChart.setLabelsVisible(true);
+        pieChart.setPrefHeight(300);
+        Label configLabel = new Label("Custom Cache Configuration:");
+
+        blockCountField = new TextField("8");
+        blockCountField.setPromptText("Total Blocks");
+
+        wayCountField = new TextField("1");
+        wayCountField.setPromptText("Ways (1=Direct, 2=2-way...)");
+
+
 
         // Setup cache table
         table = new TableView<>();
@@ -93,7 +123,8 @@ public class MainUI extends Application {
         missesLabel = new Label("Misses: 0");
         ratioLabel = new Label("Hit Ratio: 0.00%");
 
-        root.getChildren().addAll(label, addressInput, simulateBtn, resetBtn, outputArea, table, hitsLabel, missesLabel, ratioLabel,modeLabel,cacheTypeSelector);
+        root.getChildren().addAll(label, addressInput, blockCountField,
+                wayCountField, simulateBtn,pieChart,   saveBtn, resetBtn,browseBtn, outputArea, table, hitsLabel, missesLabel, ratioLabel,modeLabel,cacheTypeSelector);
 
         stage.setTitle("Cache Memory Simulator");
         stage.setScene(new Scene(root, 500, 600));
@@ -130,30 +161,61 @@ public class MainUI extends Application {
         outputArea.setText(log.toString());
         updateTable();
         updateStats();
+        updatePieChart();
+
 
     }
 
-    private void reset() {
-        String selected = cacheTypeSelector.getValue();
-        switch (selected) {
-            case "Direct-Mapped (8 blocks)":
-                cache = new DirectMappedCache(8);
-                break;
-            case "2-Way Set-Associative (8 blocks)":
-                cache = new SetAssociativeCache(8, 2);
-                break;
-            case "4-Way Set-Associative (8 blocks)":
-                cache = new SetAssociativeCache(8, 4);
-                break;
+
+        private void reset() {
+            try {
+                int blocks = Integer.parseInt(blockCountField.getText());
+                int ways = Integer.parseInt(wayCountField.getText());
+
+                if (ways <= 1) {
+                    cache = new DirectMappedCache(blocks); // 1-way = direct-mapped
+                } else {
+                    cache = new SetAssociativeCache(blocks, ways);
+                }
+
+                addressInput.clear();
+                outputArea.clear();
+                updateStats();
+                updateTable();
+                updatePieChart();
+
+            } catch (NumberFormatException ex) {
+                outputArea.setText("Invalid input for cache size or ways. Please enter valid numbers.");
+            }
         }
 
-        cache.reset();
-        addressInput.clear();
-        outputArea.clear();
-        updateTable();
-        updateStats();
 
+
+
+
+    private void loadFile() {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Open Memory Address File");
+        fileChooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("Text Files", "*.txt"),
+                new FileChooser.ExtensionFilter("All Files", "*.*")
+        );
+
+        File selectedFile = fileChooser.showOpenDialog(null);
+        if (selectedFile != null) {
+            try (BufferedReader reader = new BufferedReader(new FileReader(selectedFile))) {
+                StringBuilder content = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    content.append(line).append("\n");
+                }
+                addressInput.setText(content.toString());
+            } catch (IOException ex) {
+                outputArea.setText("Error reading file: " + ex.getMessage());
+            }
+        }
     }
+
 
     private void updateTable() {
 
@@ -198,5 +260,39 @@ public class MainUI extends Application {
         missesLabel.setText("Misses: " + misses);
         ratioLabel.setText(String.format("Hit Ratio: %.2f%%", ratio));
     }
+    private void updatePieChart() {
+        int hits = cache.getHitCount();
+        int misses = cache.getMissCount();
+
+        ObservableList<PieChart.Data> pieData = FXCollections.observableArrayList(
+                new PieChart.Data("Hits", hits),
+                new PieChart.Data("Misses", misses)
+        );
+        pieChart.setData(pieData);
+    }
+    private void saveOutputToFile() {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Save Simulation Output");
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Text Files", "*.txt"));
+
+        File file = fileChooser.showSaveDialog(null);
+        if (file != null) {
+            try (FileWriter writer = new FileWriter(file)) {
+                writer.write("Cache Simulation Result\n\n");
+                writer.write(outputArea.getText());
+                writer.write("\n\nHits: " + cache.getHitCount());
+                writer.write("\nMisses: " + cache.getMissCount());
+                int total = cache.getHitCount() + cache.getMissCount();
+                double ratio = total == 0 ? 0.0 : (double) cache.getHitCount() / total;
+                writer.write("\nHit Ratio: " + String.format("%.2f", ratio));
+                outputArea.appendText("\nOutput saved to: " + file.getAbsolutePath());
+            } catch (IOException e) {
+                outputArea.appendText("\nError saving file: " + e.getMessage());
+            }
+        }
+    }
+
+
+
 
 }
