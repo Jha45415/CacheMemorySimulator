@@ -1,6 +1,4 @@
-//Represents a cache block with two fields:
-//    tag (int)
-//    valid (boolean)
+
 package Cache;
 public class CacheBlock {
     private int tag;
