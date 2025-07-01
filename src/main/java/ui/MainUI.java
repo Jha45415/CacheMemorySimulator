@@ -1,9 +1,6 @@
 package ui;
 
-import Cache.CacheBlock;
-import Cache.CacheInterface;
-import Cache.DirectMappedCache;
-import Cache.SetAssociativeCache;
+import Cache.*;
 import javafx.application.Application;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -12,6 +9,7 @@ import javafx.scene.Scene;
 import javafx.scene.chart.PieChart;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -37,6 +35,12 @@ public class MainUI extends Application {
     private PieChart pieChart;
     private TextField blockCountField;
     private TextField wayCountField;
+    private TableView<CacheRow> l1Table;
+    private TableView<CacheRow> l2Table;
+    private TableView<CacheRow> l3Table;
+    private Label l1InfoLabel, l2InfoLabel, l3InfoLabel;
+
+
 
 
 
@@ -56,47 +60,17 @@ public class MainUI extends Application {
         public boolean isValid() { return valid; }
     }
 
+
     @Override
     public void start(Stage stage) {
-        cache = new SetAssociativeCache(8,2); // 8-block cache
+        cache = new SetAssociativeCache(8,2); // Default cache, can be reset
 
-        VBox root = new VBox(10);
-        root.setPadding(new Insets(10));
+        VBox root = new VBox(12);
+        root.setPadding(new Insets(14));
 
         Label label = new Label("Enter Memory Addresses (one per line):");
         addressInput = new TextArea();
         addressInput.setPromptText("e.g.\n4\n8\n4\n0x10");
-        Label modeLabel = new Label("Select Cache Type:");
-        cacheTypeSelector = new ComboBox<>();
-        cacheTypeSelector.getItems().addAll(
-                "Direct-Mapped (8 blocks)",
-                "2-Way Set-Associative (8 blocks)",
-                "4-Way Set-Associative (8 blocks)"
-        );
-        cacheTypeSelector.getSelectionModel().selectFirst();  // default option
-
-
-        Button simulateBtn = new Button("Simulate");
-        Button resetBtn = new Button("Reset");
-
-        simulateBtn.setOnAction(e -> simulateAccesses());
-        resetBtn.setOnAction(e -> reset());
-        Button browseBtn = new Button("Browse File");
-        browseBtn.setOnAction(e -> loadFile());
-        Button saveBtn = new Button("Save Output");
-        saveBtn.setOnAction(e -> saveOutputToFile());
-
-
-
-        outputArea = new TextArea();
-        outputArea.setEditable(false);
-        outputArea.setPromptText("Simulation output...");
-        pieChart = new PieChart();
-        pieChart.setTitle("Cache Hit vs Miss");
-        pieChart.setLegendVisible(true);
-        pieChart.setLabelsVisible(true);
-        pieChart.setPrefHeight(300);
-        Label configLabel = new Label("Custom Cache Configuration:");
 
         blockCountField = new TextField("8");
         blockCountField.setPromptText("Total Blocks");
@@ -104,90 +78,191 @@ public class MainUI extends Application {
         wayCountField = new TextField("1");
         wayCountField.setPromptText("Ways (1=Direct, 2=2-way...)");
 
+        cacheTypeSelector = new ComboBox<>();
+        cacheTypeSelector.getItems().addAll(
+                "Direct-Mapped (8 blocks)",
+                "2-Way Set-Associative (8 blocks)",
+                "4-Way Set-Associative (8 blocks)",
+                "Multi-Level Cache"
+        );
+        cacheTypeSelector.getSelectionModel().selectFirst();
 
+        Button simulateBtn = new Button("Simulate");
+        Button resetBtn = new Button("Reset");
+        Button browseBtn = new Button("Browse File");
+        Button saveBtn = new Button("Save Output");
 
-        // Setup cache table
-        table = new TableView<>();
-        TableColumn<CacheRow, Integer> indexCol = new TableColumn<>("Index");
-        indexCol.setCellValueFactory(new PropertyValueFactory<>("index"));
+        simulateBtn.setOnAction(e -> simulateAccesses());
+        resetBtn.setOnAction(e -> reset());
+        browseBtn.setOnAction(e -> loadFile());
+        saveBtn.setOnAction(e -> saveOutputToFile());
 
-        TableColumn<CacheRow, Integer> tagCol = new TableColumn<>("Tag");
-        tagCol.setCellValueFactory(new PropertyValueFactory<>("tag"));
+        outputArea = new TextArea();
+        outputArea.setEditable(false);
+        outputArea.setPromptText("Simulation output...");
 
-        TableColumn<CacheRow, Boolean> validCol = new TableColumn<>("Valid");
-        validCol.setCellValueFactory(new PropertyValueFactory<>("valid"));
+        pieChart = new PieChart();
+        pieChart.setTitle("Cache Hit vs Miss");
+        pieChart.setLegendVisible(true);
+        pieChart.setLabelsVisible(true);
+        pieChart.setPrefHeight(200);
+        pieChart.setPrefWidth(280);
 
-        table.getColumns().addAll(indexCol, tagCol, validCol);
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         hitsLabel = new Label("Hits: 0");
         missesLabel = new Label("Misses: 0");
         ratioLabel = new Label("Hit Ratio: 0.00%");
 
-        root.getChildren().addAll(label, addressInput, blockCountField,
-                wayCountField, simulateBtn,pieChart,   saveBtn, resetBtn,browseBtn, outputArea, table, hitsLabel, missesLabel, ratioLabel,modeLabel,cacheTypeSelector);
 
+        hitsLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        missesLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        ratioLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+
+        Label modeLabel = new Label("Select Cache Type:");
+
+        l1InfoLabel = new Label("L1 Blocks: ");
+        l2InfoLabel = new Label("L2 Blocks: ");
+        l3InfoLabel = new Label("L3 Blocks: ");
+
+        l1Table = createCacheTable();
+        l2Table = createCacheTable();
+        l3Table = createCacheTable();
+
+        Label l1Label = new Label("L1 Cache");
+        Label l2Label = new Label("L2 Cache");
+        Label l3Label = new Label("L3 Cache");
+
+
+        VBox statsVBox = new VBox(10, hitsLabel, missesLabel, ratioLabel);
+        HBox statsBox = new HBox(32, pieChart, statsVBox);
+        statsBox.setPadding(new Insets(12));
+
+
+        root.getChildren().addAll(
+                label, addressInput,
+                blockCountField, wayCountField,
+                cacheTypeSelector, modeLabel,
+                simulateBtn, resetBtn, browseBtn, saveBtn,
+                statsBox,
+                outputArea,
+                l1InfoLabel, l1Label, l1Table,
+                l2InfoLabel, l2Label, l2Table,
+                l3InfoLabel, l3Label, l3Table
+        );
+
+        ScrollPane scrollPane = new ScrollPane(root);
+        scrollPane.setFitToWidth(true);
+        Scene scene = new Scene(scrollPane, 900, 900);
+        stage.setScene(scene);
+        stage.setResizable(true);
+        stage.setMinWidth(900);
+        stage.setMinHeight(900);
         stage.setTitle("Cache Memory Simulator");
-        stage.setScene(new Scene(root, 500, 600));
         stage.show();
 
-        updateTable();
+        reset();
     }
 
+
+
     private void simulateAccesses() {
-        String selected = cacheTypeSelector.getValue();
-
-
-
         String[] lines = addressInput.getText().split("\\s+|\\n");
         StringBuilder log = new StringBuilder();
 
         for (String line : lines) {
             if (line.trim().isEmpty()) continue;
             try {
-                int address = line.startsWith("0x") ? Integer.parseInt(line.substring(2), 16)
-                        : Integer.parseInt(line);
+                int address = line.startsWith("0x") ? Integer.parseInt(line.substring(2), 16) : Integer.parseInt(line);
 
                 boolean hit = cache.access(address);
+
                 int index = cache.getLastAccessedIndex();
                 lastAccessedIndex = index;
                 lastAccessWasHit = hit;
 
-                log.append("Address ").append(line).append(" => ").append(hit ? "HIT" : "MISS").append("\n");
+                String result;
+                if (cache instanceof MultiLevelCache) {
+                    result = ((MultiLevelCache) cache).getLastHitLevel();
+                } else {
+                    result = hit ? "HIT" : "MISS";
+                }
+
+                log.append("Address ")
+                        .append(line)
+                        .append(" => ")
+                        .append(result)
+                        .append("\n");
+
+
+                if (cache instanceof MultiLevelCache) {
+                    l1Table.setItems(getRows(((MultiLevelCache) cache).getL1Blocks()));
+                    l2Table.setItems(getRows(((MultiLevelCache) cache).getL2Blocks()));
+                    l3Table.setItems(getRows(((MultiLevelCache) cache).getL3Blocks()));
+                } else {
+                    l1Table.setItems(getRows(cache.getBlocks()));
+                    l2Table.setItems(FXCollections.observableArrayList());
+                    l3Table.setItems(FXCollections.observableArrayList());
+                }
+
             } catch (NumberFormatException ex) {
                 log.append("Invalid input: ").append(line).append("\n");
             }
         }
 
         outputArea.setText(log.toString());
-        updateTable();
         updateStats();
         updatePieChart();
-
-
     }
 
 
-        private void reset() {
-            try {
-                int blocks = Integer.parseInt(blockCountField.getText());
-                int ways = Integer.parseInt(wayCountField.getText());
 
-                if (ways <= 1) {
-                    cache = new DirectMappedCache(blocks); // 1-way = direct-mapped
-                } else {
-                    cache = new SetAssociativeCache(blocks, ways);
-                }
-
-                addressInput.clear();
-                outputArea.clear();
-                updateStats();
-                updateTable();
-                updatePieChart();
-
-            } catch (NumberFormatException ex) {
-                outputArea.setText("Invalid input for cache size or ways. Please enter valid numbers.");
-            }
+    private void reset() {
+        String selected = cacheTypeSelector.getValue();
+        switch (selected) {
+            case "Direct-Mapped (8 blocks)":
+                cache = new DirectMappedCache(8);
+                break;
+            case "2-Way Set-Associative (8 blocks)":
+                cache = new SetAssociativeCache(8, 2);
+                break;
+            case "4-Way Set-Associative (8 blocks)":
+                cache = new SetAssociativeCache(8, 4);
+                break;
+            case "Multi-Level Cache":
+                CacheInterface l1 = new DirectMappedCache(8);
+                CacheInterface l2 = new SetAssociativeCache(8, 2);
+                CacheInterface l3 = new SetAssociativeCache(16, 4);
+                cache = new MultiLevelCache(l1, l2, l3);
+                break;
         }
+        cache.reset();
+        addressInput.clear();
+        outputArea.clear();
+
+        if (cache instanceof MultiLevelCache) {
+            l1InfoLabel.setText("L1 Blocks: " + ((MultiLevelCache) cache).getL1BlockCount());
+            l2InfoLabel.setText("L2 Blocks: " + ((MultiLevelCache) cache).getL2BlockCount());
+            l3InfoLabel.setText("L3 Blocks: " + ((MultiLevelCache) cache).getL3BlockCount());
+            l1Table.setItems(FXCollections.observableArrayList());
+            l2Table.setItems(FXCollections.observableArrayList());
+            l3Table.setItems(FXCollections.observableArrayList());
+        } else {
+            l1InfoLabel.setText("L1 Blocks: " + cache.getBlockCount());
+            l2InfoLabel.setText("L2 Blocks: 0");
+            l3InfoLabel.setText("L3 Blocks: 0");
+            l1Table.setItems(FXCollections.observableArrayList());
+            l2Table.setItems(FXCollections.observableArrayList());
+            l3Table.setItems(FXCollections.observableArrayList());
+        }
+
+        hitsLabel.setText("Hits: 0");
+        missesLabel.setText("Misses: 0");
+        ratioLabel.setText("Hit Ratio: 0.00%");
+        updatePieChart();
+        updateStats();
+    }
+
+
+
 
 
 
@@ -229,7 +304,7 @@ public class MainUI extends Application {
 
             table.setItems(rows);
 
-            // Add row coloring logic
+
             table.setRowFactory(tv -> new TableRow<>() {
                 @Override
                 protected void updateItem(CacheRow row, boolean empty) {
@@ -250,6 +325,15 @@ public class MainUI extends Application {
 
 
     }
+    private ObservableList<CacheRow> getRows(CacheBlock[] blocks) {
+        ObservableList<CacheRow> rows = FXCollections.observableArrayList();
+        for (int i = 0; i < blocks.length; i++) {
+            CacheBlock block = blocks[i];
+            rows.add(new CacheRow(i, block.getTag(), block.isValid()));
+        }
+        return rows;
+    }
+
     private void updateStats() {
     int hits = cache.getHitCount();
         int misses = cache.getMissCount();
@@ -263,13 +347,23 @@ public class MainUI extends Application {
     private void updatePieChart() {
         int hits = cache.getHitCount();
         int misses = cache.getMissCount();
-
-        ObservableList<PieChart.Data> pieData = FXCollections.observableArrayList(
+        ObservableList<PieChart.Data> pieChartData = FXCollections.observableArrayList(
                 new PieChart.Data("Hits", hits),
                 new PieChart.Data("Misses", misses)
         );
-        pieChart.setData(pieData);
+        pieChart.setData(pieChartData);
+
+
+        pieChart.applyCss();
+        for (PieChart.Data data : pieChartData) {
+            if (data.getName().equals("Hits")) {
+                data.getNode().setStyle("-fx-pie-color: green;");
+            } else if (data.getName().equals("Misses")) {
+                data.getNode().setStyle("-fx-pie-color: red;");
+            }
+        }
     }
+
     private void saveOutputToFile() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save Simulation Output");
@@ -291,6 +385,19 @@ public class MainUI extends Application {
             }
         }
     }
+    private TableView<CacheRow> createCacheTable() {
+        TableView<CacheRow> table = new TableView<>();
+        TableColumn<CacheRow, Integer> indexCol = new TableColumn<>("Index");
+        indexCol.setCellValueFactory(new PropertyValueFactory<>("index"));
+        TableColumn<CacheRow, Integer> tagCol = new TableColumn<>("Tag");
+        tagCol.setCellValueFactory(new PropertyValueFactory<>("tag"));
+        TableColumn<CacheRow, Boolean> validCol = new TableColumn<>("Valid");
+        validCol.setCellValueFactory(new PropertyValueFactory<>("valid"));
+        table.getColumns().addAll(indexCol, tagCol, validCol);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        return table;
+    }
+
 
 
 
