@@ -83,7 +83,8 @@ public class MainUI extends Application {
                 "Direct-Mapped (8 blocks)",
                 "2-Way Set-Associative (8 blocks)",
                 "4-Way Set-Associative (8 blocks)",
-                "Multi-Level Cache"
+                "Multi-Level Cache",
+                "Custom Configuration"
         );
         cacheTypeSelector.getSelectionModel().selectFirst();
 
@@ -165,6 +166,48 @@ public class MainUI extends Application {
 
 
     private void simulateAccesses() {
+        String selected = cacheTypeSelector.getValue();
+
+
+        switch (selected) {
+            case "Direct-Mapped (8 blocks)":
+                cache = new DirectMappedCache(8);
+                break;
+            case "2-Way Set-Associative (8 blocks)":
+                cache = new SetAssociativeCache(8, 2);
+                break;
+            case "4-Way Set-Associative (8 blocks)":
+                cache = new SetAssociativeCache(8, 4);
+                break;
+            case "Multi-Level Cache":
+                CacheInterface l1 = new DirectMappedCache(4);
+                CacheInterface l2 = new SetAssociativeCache(8, 2);
+                CacheInterface l3 = new SetAssociativeCache(16, 4);
+                cache = new MultiLevelCache(l1, l2, l3);
+                break;
+            case "Custom Configuration": 
+                try {
+                    int totalBlocks = Integer.parseInt(blockCountField.getText());
+                    int ways = Integer.parseInt(wayCountField.getText());
+
+                    if (ways <= 0 || totalBlocks <= 0 || totalBlocks % ways != 0) {
+                        outputArea.setText("Error: Invalid block/way count.\nWays must be > 0.\nTotal Blocks must be a multiple of Ways.");
+                        return; // Stop the simulation
+                    }
+
+                    if (ways == 1) {
+                        cache = new DirectMappedCache(totalBlocks);
+                    } else {
+                        cache = new SetAssociativeCache(totalBlocks, ways);
+                    }
+                } catch (NumberFormatException e) {
+                    outputArea.setText("Error: Please enter valid numbers for Total Blocks and Ways.");
+                    return; // Stop the simulation
+                }
+                break;
+        }
+        outputArea.clear();
+
         String[] lines = addressInput.getText().split("\\s+|\\n");
         StringBuilder log = new StringBuilder();
 
@@ -172,26 +215,17 @@ public class MainUI extends Application {
             if (line.trim().isEmpty()) continue;
             try {
                 int address = line.startsWith("0x") ? Integer.parseInt(line.substring(2), 16) : Integer.parseInt(line);
-
                 boolean hit = cache.access(address);
-
                 int index = cache.getLastAccessedIndex();
                 lastAccessedIndex = index;
                 lastAccessWasHit = hit;
 
-                String result;
+                String result = hit ? "HIT" : "MISS";
                 if (cache instanceof MultiLevelCache) {
                     result = ((MultiLevelCache) cache).getLastHitLevel();
-                } else {
-                    result = hit ? "HIT" : "MISS";
                 }
 
-                log.append("Address ")
-                        .append(line)
-                        .append(" => ")
-                        .append(result)
-                        .append("\n");
-
+                log.append("Address ").append(line).append(" => ").append(result).append("\n");
 
                 if (cache instanceof MultiLevelCache) {
                     l1Table.setItems(getRows(((MultiLevelCache) cache).getL1Blocks()));

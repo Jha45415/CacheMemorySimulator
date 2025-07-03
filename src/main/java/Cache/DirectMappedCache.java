@@ -2,7 +2,7 @@
 package Cache;
 
 public class DirectMappedCache implements CacheInterface {
-    private int lastIndexAccessed = -1;
+    private int lastIndexAccessed = -1;//the cache block is empty and has not been used yet.
     private int hitCount = 0;
     private int missCount = 0;
     private final CacheBlock[] blocks;
@@ -58,11 +58,15 @@ public class DirectMappedCache implements CacheInterface {
         return lastIndexAccessed;
     }
 
-    @Override
     public void insert(String address) {
         int addr = address.startsWith("0x") ? Integer.parseInt(address.substring(2), 16) : Integer.parseInt(address);
-        access(addr);
+        int index = addr % blocks.length;
+        int tag = addr / blocks.length;
+        CacheBlock block = blocks[index];
+        block.setTag(tag);
+        block.setValid(true);
     }
+
 
     public int getBlockCount() {
         return blocks.length;

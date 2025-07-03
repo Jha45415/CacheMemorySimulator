@@ -14,35 +14,26 @@ public class MultiLevelCache implements CacheInterface {
         this.L3Cache = l3;
     }
 
-    @Override
     public boolean access(int address) {
         if (L1Cache.access(address)) {
             lastHitLevel = "L1";
-            lastAccessWasHit = true;
-            lastIndexAccessed = L1Cache.getLastAccessedIndex();
             return true;
         }
         if (L2Cache.access(address)) {
             L1Cache.insert(String.valueOf(address));
             lastHitLevel = "L2";
-            lastAccessWasHit = true;
-            lastIndexAccessed = L2Cache.getLastAccessedIndex();
             return true;
         }
         if (L3Cache.access(address)) {
             L2Cache.insert(String.valueOf(address));
             L1Cache.insert(String.valueOf(address));
             lastHitLevel = "L3";
-            lastAccessWasHit = true;
-            lastIndexAccessed = L3Cache.getLastAccessedIndex();
             return true;
         }
         L3Cache.insert(String.valueOf(address));
         L2Cache.insert(String.valueOf(address));
         L1Cache.insert(String.valueOf(address));
         lastHitLevel = "MISS";
-        lastAccessWasHit = false;
-        lastIndexAccessed = -1;
         return false;
     }
 

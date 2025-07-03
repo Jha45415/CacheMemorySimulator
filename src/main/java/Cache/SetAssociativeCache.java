@@ -81,11 +81,29 @@ public class SetAssociativeCache implements CacheInterface {
         return lastAccessedSet;
     }
 
-    @Override
     public void insert(String address) {
         int addr = address.startsWith("0x") ? Integer.parseInt(address.substring(2), 16) : Integer.parseInt(address);
-        access(addr);
+        int index = addr & indexMask;
+        int tag = addr >> Integer.numberOfTrailingZeros(sets);
+        Deque<CacheBlock> set = cacheSets.get(index);
+
+        for (CacheBlock block : set) {
+            if (block.isValid() && block.getTag() == tag) {
+
+                set.remove(block);
+                set.addLast(block);
+                return;
+            }
+        }
+        CacheBlock newBlock = new CacheBlock();
+        newBlock.setTag(tag);
+        newBlock.setValid(true);
+        if (set.size() >= ways) {
+            set.pollFirst();
+        }
+        set.addLast(newBlock);
     }
+
 
     public int getBlockCount() {
         return sets * ways;
